@@ -238,7 +238,7 @@ void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id)
         memcpy(tcb->context + 20/4, &thread_id, 4);//r4?
         memcpy(tcb->context + 72/4, &start_routine, 4);//ea
         memcpy(tcb->context + 68/4, &one, 4);//estatus
-        memcpy(tcb->context + 84/4, &tcb->context, 4);//fp shoud be at 2048 if calloc returns addr 1024?
+        memcpy(tcb->context + 84/4, &tcb->context, 4);//fp should be at 2048 if calloc returns addr 1024?
 
         // Add to ready queue
         Node *node = (Node *) malloc(sizeof(Node));
@@ -247,7 +247,7 @@ void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id)
         alt_printf("Finished creation (%x): sp: (%x)\n", thread_id, tcb->context);
 }
 
-void mythread_join(TCB *tcb)
+void mythread_join(TCB *tcb) //WTF this method only gets called once, so it must naturally suspend the calling thread, preventing the other 7 calls Camtendo 11/4
 {
         while (running_thread == NULL)
         {
@@ -266,18 +266,18 @@ void mythread_join(TCB *tcb)
 // Set return address to this
 void mythread_cleanup()//mythread_done
 {
-        DISABLE_INTERRUPTS();
+        //DISABLE_INTERRUPTS(); //Disabling interrupts here prevents the thread from completing for some reason... Camtendo 11/4
         alt_printf("COMPLETING THREAD\n");
         running_thread->thread->scheduling_status = DONE;
         add_node(running_thread, DONE);
         // Unblock thread blocked by join
-        Node * blocked_node = lookup_node(running_thread->thread->blocking_id, WAITING);
-        if (blocked_node != NULL)
-        {
-                blocked_node->thread->scheduling_status = READY;
-                add_node(blocked_node, READY);
-        }
-        ENABLE_INTERRUPTS();
+        //Node * blocked_node = lookup_node(running_thread->thread->blocking_id, WAITING); //Blocking ID was not the expected value Camtendo 11/4
+        //if (blocked_node != NULL)
+        //{
+        //        blocked_node->thread->scheduling_status = READY;
+        //        add_node(blocked_node, READY);
+        //}
+        //ENABLE_INTERRUPTS();
         while(TRUE);
 }
 
