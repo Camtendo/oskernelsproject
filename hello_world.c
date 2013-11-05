@@ -52,6 +52,8 @@ void add_node(Node *new_node, int status) {
         if (heads[status] == NULL) // 0 nodes
         {
                 heads[status] = new_node;
+                heads[status]->next = NULL;
+                heads[status]->previous = NULL;
         }
         else if (heads[status]->next == NULL) // 1 node
         {
@@ -70,17 +72,24 @@ void add_node(Node *new_node, int status) {
 }
 Node * pop(int status) {
         Node *popped = NULL;
-        if (heads[status] == NULL)
+        if (heads[status] == NULL) //0 nodes
         {
                 alt_printf("Can't pop");
         }
-        else if (heads[status]->next == NULL)
+        else if (heads[status]->next == NULL) //1
         {
                 popped = heads[status];
                 heads[status] = NULL;
                 return popped;
         }
-        else
+        else if (heads[status]->next == heads[status]->previous) //2
+		{
+				popped = heads[status];
+				heads[status] = popped->next;
+				heads[status]->next == NULL;
+				heads[status]->previous == NULL;
+		}
+        else //3+
         {
                 popped = heads[status];
                 heads[status] = popped->next; // update head
@@ -146,7 +155,7 @@ void prototype_os()
         for (i = 0; i < NUM_THREADS; i++)
         {
                 // Here: call mythread_create so that the TCB for each thread is created
-                TCB *tcb = (TCB *) malloc(sizeof(TCB));
+                TCB *tcb = (TCB *) calloc(1, sizeof(TCB));
                 mythread_create(tcb, &mythread, i);
                 threads[i] = tcb;
         }
@@ -231,7 +240,7 @@ void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id)
         // Creates a Thread Control Block for a thread
         tcb->thread_id = thread_id;
         tcb->scheduling_status = READY;
-        tcb->context = calloc(1, 768) + 128/4;
+        tcb->context = malloc(4000) + 128/4;
         int one = 1;
         void *(*ra)(void *) = &mythread_cleanup;
         memcpy(tcb->context + 0, &ra, 4);//ra
@@ -268,8 +277,8 @@ void mythread_cleanup()//mythread_done
 {
         //DISABLE_INTERRUPTS(); //Disabling interrupts here prevents the thread from completing for some reason... Camtendo 11/4
         alt_printf("COMPLETING THREAD\n");
-        running_thread->thread->scheduling_status = DONE;
         add_node(running_thread, DONE);
+        running_thread->thread->scheduling_status = DONE;
         // Unblock thread blocked by join
         //Node * blocked_node = lookup_node(running_thread->thread->blocking_id, WAITING); //Blocking ID was not the expected value Camtendo 11/4
         //if (blocked_node != NULL)
@@ -294,7 +303,7 @@ void reset_timer_flag()
 // The main method that starts up the prototype operating system
 int main()
 {
-        //alt_printf("Hello from Nios II!\n");
+        alt_printf("Hello from Nios II!\n");
         prototype_os();
         return 0;
 }
