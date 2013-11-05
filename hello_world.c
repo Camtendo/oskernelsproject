@@ -20,7 +20,7 @@
 #define FALSE 0
 #define ALARMTICKS(x) ((alt_ticks_per_second()*(x))/10)
 #define MAX 50000
-#define QUANTUM_LENGTH 20
+#define QUANTUM_LENGTH 10
 #define NUM_THREADS 8
 #define RUNNING 0
 #define READY 1
@@ -37,17 +37,19 @@ typedef struct {
         // (running, ready, waiting, start, done)
         int scheduling_status;
         int *context;
+        int *sp;
         int *fp;
         int blocking_id;
 } TCB;
 
 typedef struct Node{
-        TCB *thread;
+        TCB thread;
         struct Node *previous;
         struct Node *next;
 } Node;
 
 Node *(heads[5]);
+Node *(running_thread[2]);
 
 void add_node(Node *new_node, int status) {
         if (heads[status] == NULL) // 0 nodes
@@ -65,8 +67,9 @@ void add_node(Node *new_node, int status) {
         }
         else // 2+ nodes
         {
-        	new_node->previous->next = new_node;
         	new_node->previous = heads[status]->previous;
+        	new_node->previous->next = new_node;
+        	//new_node->previous = heads[status]->previous;
         	heads[status]->previous = new_node;
         	new_node->next = heads[status];
 //                new_node->next = heads[status]; // wrap around
@@ -76,33 +79,40 @@ void add_node(Node *new_node, int status) {
         }
 }
 Node * pop(int status) {
-        Node *popped = NULL;
-        if (heads[status] == NULL) //0 nodes
-        {
-                alt_printf("Can't pop");
-        }
-        else if (heads[status]->next == NULL) //1
-        {
-                popped = heads[status];
-                heads[status] = NULL;
-                return popped;
-        }
-        else if (heads[status]->next == heads[status]->previous) //2
-		{
-				popped = heads[status];
-				heads[status] = popped->next;
-				heads[status]->next = NULL;
-				heads[status]->previous = NULL;
-		}
-        else //3+
-        {
-                popped = heads[status];
-                heads[status] = popped->next; // update head
-                heads[status]->previous = popped->previous; // prev
-                heads[status]->previous->next = heads[status]; // prev
-                return popped;
-        }
-        return popped;
+	Node *popped = NULL;
+	if (heads[status] == NULL) //0 nodes
+	{
+		//alt_printf("Can't pop");
+	}
+	else if (heads[status]->next == NULL) //1
+	{
+		popped = heads[status];
+		heads[status] = NULL;
+		return popped;
+	}
+	else if (heads[status]->next == heads[status]->previous) //2
+	{
+		popped = heads[status];
+		heads[status] = popped->next;
+		heads[status]->next = NULL;
+		heads[status]->previous = NULL;
+	}
+	else //3+
+	{
+		popped = heads[status];
+		heads[status] = popped->next;
+		Node *last = popped->previous;
+		popped->next->previous = last;
+		last->next = popped->next;
+		popped->next = NULL;
+		popped->previous = NULL;
+//		popped = heads[status];
+//		heads[status] = popped->next; // update head
+//		heads[status]->previous = popped->previous; // prev
+//		heads[status]->previous->next = heads[status]; // prev
+		return popped;
+	}
+	return popped;
 }
 
 //FIXME: not sure if correct
@@ -136,19 +146,17 @@ void remove_node(Node *node, int status) {
 //FIXME: not checked
 Node * lookup_node(int id, int status) {
         Node * node = heads[status];
-        if (node->thread->thread_id == id)
+        if (node->thread.thread_id == id)
                                 return node;
         node = node->next;
         while (node != heads[status])
         {
-                if (node->thread->thread_id == id)
+                if (node->thread.thread_id == id)
                         return node;
                 node = node->next;
         }
         return 0;
 }
-
-Node *running_thread = NULL;
 
 void prototype_os();
 unsigned long long mythread_scheduler(unsigned long long param_list);
@@ -162,11 +170,12 @@ int timer_interrupt_flag;
 void prototype_os()
 {
         int i = 0;
+        running_thread[1] = NULL;
         TCB *threads[NUM_THREADS];
         for (i = 0; i < NUM_THREADS; i++)
         {
                 // Here: call mythread_create so that the TCB for each thread is created
-                TCB *tcb = (TCB *) calloc(1, sizeof(TCB));
+                TCB *tcb = (TCB *) malloc(sizeof(TCB));
                 mythread_create(tcb, &mythread, i);
                 threads[i] = tcb;
         }
@@ -191,33 +200,37 @@ unsigned long long mythread_scheduler(unsigned long long param_list) // context 
 {
 		int * param_ptr = &param_list;
         // If running thread is null, then store the context and add to the run queue
-        if (running_thread == NULL)
+        if (running_thread[1] == NULL)
         {
                 // Store a new context (os_prototype, most likely)
                 TCB *tcb = (TCB *) malloc(sizeof(TCB));
                 tcb->thread_id = NUM_THREADS + 1; // TODO:set to something legitimate
-                tcb->context = *param_ptr; // context pointer <---not sure this is correct?
+                tcb->sp = *param_ptr; // context pointer <---not sure this is correct?
                 tcb->fp = *(param_ptr+1);
                 Node *node = (Node *) malloc(sizeof(Node));
-                node->thread = tcb;
-                running_thread = node;
-                running_thread->thread->scheduling_status = RUNNING;
+                node->thread = *tcb;
+                running_thread[1] = node;
+                running_thread[1]->thread.scheduling_status = RUNNING;
         }
-        running_thread->thread->context = param_list; // update context pointer
+        running_thread[1]->thread.sp = *param_ptr; // update context pointer
+        running_thread[1]->thread.fp = *(param_ptr+1);
 
         // Here: perform thread scheduling
 
         Node *next = pop(READY);
         //alt_printf("Thread: %x Status:%x:\n",next->thread->thread_id, next->thread->scheduling_status);
-        if (next != NULL  && next->thread->scheduling_status == READY)
+        if (next != NULL  && next->thread.scheduling_status == READY)
         {
                 // The context of the second thread (1) is crap. Something is probably wrong with creation or join. Else there's a problem in assembly with storing the fp
-                if (running_thread->thread->scheduling_status == RUNNING) {
-                        add_node(running_thread, READY);
-                        running_thread->thread->scheduling_status = READY;
+                if (running_thread[1]->thread.scheduling_status == RUNNING) {
+                	running_thread[1]->thread.scheduling_status = READY;
+                    add_node(running_thread[1], READY);
+
                 }
-                running_thread = next;
-                running_thread->thread->scheduling_status = RUNNING;
+                running_thread[1] = (Node *) malloc(sizeof(Node));
+                running_thread[1]->thread = next->thread;
+                //running_thread[1]->thread->thread_id = next->thread->thread;
+                running_thread[1]->thread.scheduling_status = RUNNING;
         }
         else // No other threads available
         {
@@ -225,8 +238,8 @@ unsigned long long mythread_scheduler(unsigned long long param_list) // context 
                 return 0;
         }
         int vals[2];
-        vals[0]=running_thread->thread->context;
-        vals[1]=running_thread->thread->fp;
+        vals[0]=running_thread[1]->thread.sp;
+        vals[1]=running_thread[1]->thread.fp;
         // Return the new context
         return *vals;
 }
@@ -259,19 +272,19 @@ void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id)
 	        tcb->scheduling_status = READY;
 	        tcb->context = malloc(4000);
 	        tcb->fp = tcb->context + 4000/4;
-	        tcb->context = tcb->context + 128/4;
+	        tcb->sp = tcb->context + 128/4;
 	        //tcb->context = malloc(768) + 128;
 	        int one = 1;
 	        void *(*ra)(void *) = &mythread_cleanup;
-	        memcpy(tcb->context + 0, &ra, 4);//ra
-	        memcpy(tcb->context + 20/4, &thread_id, 4);//r4?
-	        memcpy(tcb->context + 72/4, &start_routine, 4);//ea
-	        memcpy(tcb->context + 68/4, &one, 4);//estatus
-	        memcpy(tcb->context + 84/4, &tcb->fp, 4);//fp should be at 2048 if calloc returns addr 1024?
+	        memcpy(tcb->sp + 0, &ra, 4);//ra
+	        memcpy(tcb->sp + 20/4, &thread_id, 4);//r4?
+	        memcpy(tcb->sp + 72/4, &start_routine, 4);//ea
+	        memcpy(tcb->sp + 68/4, &one, 4);//estatus
+	        memcpy(tcb->sp + 84/4, &tcb->fp, 4);//fp should be at 2048 if calloc returns addr 1024?
 
         // Add to ready queue
         Node *node = (Node *) malloc(sizeof(Node));
-        node->thread = tcb;
+        node->thread = *tcb;
         add_node(node, READY);
         alt_printf("Finished creation (%x): sp: (%x)\n", thread_id, tcb->context);
 }
@@ -279,16 +292,24 @@ void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id)
 void mythread_join(TCB *tcb) //WTF this method only gets called once, so it must naturally suspend the calling thread, preventing the other 7 calls Camtendo 11/4
 {
 	if (tcb->scheduling_status != DONE){
-		while (running_thread == NULL)
+		while (running_thread[1] == NULL)
 		{
 			int i;
 			for (i = 0 ; i < MAX; i++);
 		}
 		//DISABLE_INTERRUPTS();
-		int id = running_thread->thread->thread_id;
-		add_node(running_thread, WAITING);
-		tcb->blocking_id = id;
-		running_thread->thread->scheduling_status = WAITING;
+		alt_printf("Joining.\n");
+		int id = running_thread[1]->thread.thread_id;
+		add_node(running_thread[1], WAITING);
+		if (tcb->scheduling_status != DONE){
+			tcb->blocking_id = id;
+			running_thread[1]->thread.scheduling_status = WAITING;
+		}
+		while(running_thread[1]->thread.scheduling_status == WAITING)
+		{
+			int i;
+			for (i = 0 ; i < MAX; i++);
+		}
 		//ENABLE_INTERRUPTS();
 	}
 
@@ -299,17 +320,19 @@ void mythread_cleanup()//mythread_done
 {
         //DISABLE_INTERRUPTS(); //Disabling interrupts here prevents the thread from completing for some reason... Camtendo 11/4
         alt_printf("COMPLETING THREAD\n");
-        add_node(running_thread, DONE);
+
 
         // Unblock thread blocked by join
-        Node * blocked_node = lookup_node(running_thread->thread->blocking_id, WAITING); //Blocking ID was not the expected value Camtendo 11/4
+        Node * blocked_node = lookup_node(running_thread[1]->thread.blocking_id, WAITING); //Blocking ID was not the expected value Camtendo 11/4
         if (blocked_node != NULL)
         {
-                blocked_node->thread->scheduling_status = READY;
+                blocked_node->thread.scheduling_status = READY;
                 add_node(blocked_node, READY);
         }
-        running_thread->thread->scheduling_status = DONE;
+        add_node(running_thread[1], DONE);
+        running_thread[1]->thread.scheduling_status = DONE;
         //ENABLE_INTERRUPTS();
+        alt_printf("COMPLETED\n");
         while(TRUE);
 }
 
