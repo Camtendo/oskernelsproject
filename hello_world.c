@@ -198,8 +198,7 @@ int mythread_scheduler(void *param_list) // context pointer
         Node *next = pop(READY);
         if (next != NULL  && next->thread->scheduling_status == READY)
         {
-                // The context of the second thread (1) is crap. Something is probably wrong with creation or join. Else there's a problem in assembly with storing the fp
-                if (running_thread->thread->scheduling_status == RUNNING || running_thread->thread->scheduling_status == READY) {
+                if (running_thread->thread->scheduling_status == RUNNING) {
                         add_node(running_thread, READY);
                         running_thread->thread->scheduling_status = READY;
                 }
@@ -209,6 +208,7 @@ int mythread_scheduler(void *param_list) // context pointer
         else // No other threads available
         {
                 alt_printf("Interrupted by the DE2 timer!\n");
+                //return 0;
         }
         // Return the new context
         return running_thread->thread->context;

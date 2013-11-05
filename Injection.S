@@ -15,10 +15,11 @@
 		mov   r4, sp
 		call mythread_scheduler
 		/* TODO: check if context changes? Maybe a -1 or something if it should not. Or a zero*/
-		switch_context:
+		beq   r2, r0, no_change
 		mov   sp, r2
 		/* Set the new frame pointer */
         ldw   fp, 84(sp)
+        no_change:
 		not_timer:
 		call    reset_timer_flag
 		// Enable interrupts
