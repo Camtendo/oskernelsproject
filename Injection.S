@@ -11,14 +11,16 @@
 		// Check timerflag
 		call    check_timer_flag
 		beq   r2, r0, not_timer
-		stw   fp, 84(sp)
+		//stw   fp, 84(sp)
+		mov   r5, fp
 		mov   r4, sp
 		call mythread_scheduler
 		/* TODO: check if context changes? Maybe a -1 or something if it should not. Or a zero*/
 		beq   r2, r0, no_change
 		mov   sp, r2
+		mov   fp, r3
 		/* Set the new frame pointer */
-        ldw   fp, 84(sp)
+        //ldw   fp, 84(sp)
         no_change:
 		not_timer:
 		call    reset_timer_flag
