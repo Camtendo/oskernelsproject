@@ -196,7 +196,7 @@ int mythread_scheduler(void *param_list) // context pointer
         // Here: perform thread scheduling
 
         Node *next = pop(READY);
-        if (next != NULL)
+        if (next != NULL  && next->thread->scheduling_status == READY)
         {
                 // The context of the second thread (1) is crap. Something is probably wrong with creation or join. Else there's a problem in assembly with storing the fp
                 if (running_thread->thread->scheduling_status == RUNNING || running_thread->thread->scheduling_status == READY) {
@@ -264,12 +264,12 @@ void mythread_join(TCB *tcb) //WTF this method only gets called once, so it must
                 for (i = 0 ; i < MAX; i++);
         }
 
-        DISABLE_INTERRUPTS();
+        //DISABLE_INTERRUPTS();
         int id = running_thread->thread->thread_id;
         running_thread->thread->scheduling_status = WAITING;
         add_node(running_thread, WAITING);
         tcb->blocking_id = id;
-        ENABLE_INTERRUPTS();
+        //ENABLE_INTERRUPTS();
 }
 
 // Set return address to this
