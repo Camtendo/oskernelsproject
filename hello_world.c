@@ -5,7 +5,7 @@
  *
  * This program runs a continuous method "prototype_os" to simulate the operating system.
  * An alarm interrupts the "prototype_os" method.
- * These interrupts are then handled by our "myinterrupt_hander"
+ * These interrupts cause the scheduler to run.
  * Output is provided to stdout to indicate what the program is doing.
  */
 
@@ -20,7 +20,7 @@
 #define FALSE 0
 #define ALARMTICKS(x) ((alt_ticks_per_second()*(x))/10)
 #define MAX 50000
-#define QUANTUM_LENGTH 10
+#define QUANTUM_LENGTH 5
 #define NUM_THREADS 8
 #define RUNNING 0
 #define READY 1
@@ -69,13 +69,8 @@ void add_node(Node *new_node, int status) {
 	{
 		new_node->previous = heads[status]->previous;
 		new_node->previous->next = new_node;
-		//new_node->previous = heads[status]->previous;
 		heads[status]->previous = new_node;
 		new_node->next = heads[status];
-		//                new_node->next = heads[status]; // wrap around
-		//                new_node->previous = heads[status]->previous;
-		//                new_node->previous->next = new_node;
-		//                heads[status]->previous = new_node; //wrap around
 	}
 }
 Node * pop(int status) {
@@ -205,10 +200,11 @@ void prototype_os()
 	{
 		alt_printf ("This is the OS prototype for my exciting CSE351 course projects!\n");
 		int j = 0;
-		for (j = 0 ; j < MAX; j++);
+		for (j = 0 ; j < MAX * 10; j++);
 	}
 }
 
+// This is the scheduler. It works with Injection.S to switch between threads
 unsigned long long mythread_scheduler(unsigned long long param_list) // context pointer
 {
 	int * param_ptr = &param_list;
@@ -229,9 +225,7 @@ unsigned long long mythread_scheduler(unsigned long long param_list) // context 
 	running_thread[1]->thread.fp = *(param_ptr+1);
 
 	// Here: perform thread scheduling
-
 	Node *next = pop(READY);
-	//alt_printf("Thread: %x Status:%x:\n",next->thread->thread_id, next->thread->scheduling_status);
 	if (next != NULL  && next->thread.scheduling_status == READY)
 	{
 		// The context of the second thread (1) is crap. Something is probably wrong with creation or join. Else there's a problem in assembly with storing the fp
@@ -247,19 +241,18 @@ unsigned long long mythread_scheduler(unsigned long long param_list) // context 
 	else // No other threads available
 	{
 		alt_printf("Interrupted by the DE2 timer!\n");
+		running_thread[1]->thread.scheduling_status = RUNNING;
 		return 0;
 	}
+	// Prepare values to return
 	unsigned long long ret_list;
 	int * rets = &ret_list;
 	*(rets) = running_thread[1]->thread.sp;
 	*(rets + 1) = running_thread[1]->thread.fp;
-	//        int vals[2];
-	//        vals[0]=running_thread[1]->thread.sp;
-	//        vals[1]=running_thread[1]->thread.fp;
-	// Return the new context
 	return ret_list;
 }
 
+// Sets the timer_interrupt_flag that is checked by Injection.S
 alt_u32 mythread_handler(void *param_list)
 {
 	// Here: the global flag is used to indicate a timer interrupt
@@ -268,6 +261,7 @@ alt_u32 mythread_handler(void *param_list)
 	return ALARMTICKS(QUANTUM_LENGTH);
 }
 
+// Provided thread code
 void mythread(int thread_id)
 {
 	// The declaration of j as an integer was added on 10/24/2011
