@@ -20,7 +20,7 @@
 #define FALSE 0
 #define ALARMTICKS(x) ((alt_ticks_per_second()*(x))/10)
 #define MAX 50000
-#define QUANTUM_LENGTH 5
+#define QUANTUM_LENGTH 10
 #define NUM_THREADS 8
 #define RUNNING 0
 #define READY 1
@@ -51,13 +51,14 @@ typedef struct Node{
 Node *(heads[5]);
 Node *(running_thread[2]);
 
+// Add a node to the specified status queue
 void add_node(Node *new_node, int status) {
 	if (heads[status] == NULL) // 0 nodes
-			{
+	{
 		heads[status] = new_node;
 		heads[status]->next = NULL;
 		heads[status]->previous = NULL;
-			}
+	}
 	else if (heads[status]->next == NULL) // 1 node
 	{
 		heads[status]->next = new_node;
@@ -73,11 +74,13 @@ void add_node(Node *new_node, int status) {
 		new_node->next = heads[status];
 	}
 }
+
+// Pop the first node from the specified status queue
 Node * pop(int status) {
 	Node *popped = NULL;
 	if (heads[status] == NULL) //0 nodes
 	{
-		//alt_printf("Can't pop");
+		// Do nothing. Popped is already NULL
 	}
 	else if (heads[status]->next == NULL) //1
 	{
@@ -101,16 +104,12 @@ Node * pop(int status) {
 		last->next = popped->next;
 		popped->next = NULL;
 		popped->previous = NULL;
-		//		popped = heads[status];
-		//		heads[status] = popped->next; // update head
-		//		heads[status]->previous = popped->previous; // prev
-		//		heads[status]->previous->next = heads[status]; // prev
 		return popped;
 	}
 	return popped;
 }
 
-//FIXME: not sure if correct
+// Remove a node from the specified status queue
 void remove_node(Node *node, int status) {
 	if (node->next == NULL) //1 node
 	{
@@ -138,7 +137,7 @@ void remove_node(Node *node, int status) {
 	}
 }
 
-//FIXME: not checked
+// Lookup a node in the specified status queue
 Node * lookup_node(int id, int status) {
 	Node * node = heads[status];
 	if (node == NULL) {
@@ -175,6 +174,7 @@ void mythread_join(int thread_id);
 void mythread_cleanup();
 int timer_interrupt_flag;
 
+// Our operating system prototype
 void prototype_os()
 {
 	int i = 0;
@@ -274,6 +274,7 @@ void mythread(int thread_id)
 	}
 }
 
+// Creates a thread and adds it to the ready queue
 void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id)
 {
 	alt_printf("Creating...\n");
@@ -284,14 +285,14 @@ void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id)
 	tcb->context = malloc(4000);
 	tcb->fp = tcb->context + 4000/4;
 	tcb->sp = tcb->context + 128/4;
-	//tcb->context = malloc(768) + 128;
+
 	int one = 1;
 	void *(*ra)(void *) = &mythread_cleanup;
 	memcpy(tcb->sp + 0, &ra, 4);//ra
 	memcpy(tcb->sp + 20/4, &thread_id, 4);//r4?
 	memcpy(tcb->sp + 72/4, &start_routine, 4);//ea
 	memcpy(tcb->sp + 68/4, &one, 4);//estatus
-	memcpy(tcb->sp + 84/4, &tcb->fp, 4);//fp should be at 2048 if calloc returns addr 1024?
+	memcpy(tcb->sp + 84/4, &tcb->fp, 4);//fp
 
 	// Add to ready queue
 	Node *node = (Node *) malloc(sizeof(Node));
@@ -300,6 +301,7 @@ void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id)
 	alt_printf("Finished creation (%x): sp: (%x)\n", thread_id, tcb->context);
 }
 
+// Joins the thread with the calling thread
 void mythread_join(int thread_id)
 {
 	// Wait for timer the first time
@@ -311,18 +313,16 @@ void mythread_join(int thread_id)
 	temp = lookup_node(thread_id, READY);
 	TCB *tcb;
 	int calling_id = running_thread[1]->thread.thread_id;
-	alt_printf("Joining if not finished.\n");
-	//DISABLE_INTERRUPTS();
+	alt_printf("Joining.\n");
 	temp = lookup_node(thread_id, READY);
 	if (temp > 0)
 		tcb = &temp->thread;
 	if (temp > 0 && tcb->scheduling_status != DONE){
+		// Join the thread
 		tcb->blocking_id = calling_id;
 		running_thread[1]->thread.scheduling_status = WAITING;
 		joined = TRUE;
 	}
-	//ENABLE_INTERRUPTS();
-
 	if (joined == TRUE)
 		alt_printf("Joined (%x)\n", thread_id);
 	// Wait for timer
@@ -330,11 +330,9 @@ void mythread_join(int thread_id)
 		for (i = 0 ; i < MAX; i++);
 }
 
-// Set return address to this
-void mythread_cleanup()//mythread_done
+// Threads return here and space is freed
+void mythread_cleanup()
 {
-	//alt_printf("COMPLETING THREAD...\n");
-
 	// Unblock thread blocked by join
 	DISABLE_INTERRUPTS();
 	int id = running_thread[1]->thread.blocking_id;
@@ -361,12 +359,12 @@ void mythread_cleanup()//mythread_done
 
 int check_timer_flag()
 {
-	return timer_interrupt_flag; //returns in registers (2 and 3?)
+	return timer_interrupt_flag; //returns in registers (2 and 3)
 }
 
 void reset_timer_flag()
 {
-	timer_interrupt_flag = 0; //returns in registers (2 and 3?)
+	timer_interrupt_flag = 0; //returns in registers (2 and 3)
 }
 
 // The main method that starts up the prototype operating system
