@@ -5,10 +5,10 @@ static Q_type static_queue = {NULL, NULL, 0};
 
 void enqueue(void *data)
 {
-	enqueueInQueue(static_queue, data);
+	enqueueInQueue(&static_queue, data);
 }
 
-void enqueueInQueue(Q_type queue, void *data)
+void enqueueInQueue(Q_type *_queue, void *data)
 {
     E_type  *elem;
     
@@ -20,31 +20,31 @@ void enqueueInQueue(Q_type queue, void *data)
     elem->data = data;
     elem->next = NULL;
     
-    if (queue.head == NULL)
-    	queue.head = elem;
+    if (_queue->head == NULL)
+    	_queue->head = elem;
     else
-    	queue.tail->next = elem;
-    queue.tail = elem;
+    	_queue->tail->next = elem;
+    _queue->tail = elem;
 
-    queue.size++;
+    _queue->size++;
 }
 void *dequeue()
 {
-	return dequeueFromQueue(static_queue);
+	return dequeueFromQueue(&static_queue);
 }
-void *dequeueFromQueue(Q_type queue)
+void *dequeueFromQueue(Q_type *_queue)
 {
     E_type  *elem;
     void    *data = NULL;
     
-    if (queue.size != 0)
+    if (_queue->size != 0)
     {
-        elem = queue.head;
-        if (queue.size == 1)
-        	queue.tail = NULL;
-        queue.head = queue.head->next;
+        elem = _queue->head;
+        if (_queue->size == 1)
+        	_queue->tail = NULL;
+        _queue->head = _queue->head->next;
         
-        queue.size--;
+        _queue->size--;
         data = elem->data;
         free(elem);
     }
@@ -53,9 +53,9 @@ void *dequeueFromQueue(Q_type queue)
 }
 unsigned int getQsize()
 {
-	return getQsizeOfQueue(static_queue);
+	return getQsizeOfQueue(&static_queue);
 }
-unsigned int getQsizeOfQueue(Q_type queue)
+unsigned int getQsizeOfQueue(Q_type *_queue)
 {
-    return queue.size;
+    return _queue->size;
 }

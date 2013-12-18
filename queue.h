@@ -26,8 +26,8 @@ void *dequeue();
 
 unsigned int getQsize();
 
-void enqueueInQueue(Q_type queue, void *data);
+void enqueueInQueue(Q_type *queue, void *data);
 
-void *dequeueFromQueue(Q_type queue);
+void *dequeueFromQueue(Q_type *queue);
 
-unsigned int getQsizeOfQueue(Q_type queue);
+unsigned int getQsizeOfQueue(Q_type *queue);

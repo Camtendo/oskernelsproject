@@ -41,7 +41,7 @@ void mysem_signal( my_sem_t* sem ) {
 
 	printf("Signal semaphore. Updated count: %d\n", sem->count);
 	if (sem->count <= 0) {//<= or >=
-		tcb *blocked_node = (tcb *) dequeueFromQueue(*((Q_type *)sem->blocking_queue));
+		tcb *blocked_node = (tcb *) dequeueFromQueue(((Q_type *)sem->blocking_queue));
 		if (blocked_node != NULL) {
 			blocked_node->state = READY;
 			enqueue(blocked_node);
@@ -63,7 +63,7 @@ void mysem_wait( my_sem_t* sem ) {
 	if (sem->count < 0) {
 
 		current_running_thread->state = BLOCKED;
-		enqueueInQueue(*((Q_type *)sem->blocking_queue), current_running_thread);
+		enqueueInQueue(((Q_type *)sem->blocking_queue), current_running_thread);
 		sem->threads_waiting = sem->threads_waiting + 1;
 		printf("Blocked: %d\nThreads waiting: %d\n",
 				current_running_thread->tid,
