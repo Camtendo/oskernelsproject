@@ -27,6 +27,7 @@
 #define WAITING 2
 #define START 3
 #define DONE 4
+#define BUFFER_SIZE 6
 // disable an interrupt
 #define DISABLE_INTERRUPTS() asm("wrctl status, zero");
 // enable an interrupt
@@ -48,8 +49,17 @@ typedef struct Node{
 	struct Node *next;
 } Node;
 
-Node *(heads[5]);
+Node *(heads[8]);
+int headCount = 5;
 Node *(running_thread[2]);
+
+typedef struct my_sem_t {
+	int sem_blocking_id;
+	int count;
+	int threads_waiting;
+} my_sem_t;
+
+
 
 // Add a node to the specified status queue
 void add_node(Node *new_node, int status) {
@@ -172,11 +182,26 @@ void mythread(int thread_id);
 void mythread_create(TCB *tcb, void *(*start_routine)(void*), int thread_id);
 void mythread_join(int thread_id);
 void mythread_cleanup();
+my_sem_t* mysem_create( int initialCount );
+void mysem_signal( my_sem_t* sem );
+void mysem_wait( my_sem_t* sem );
+void mysem_delete( my_sem_t* sem );
 int timer_interrupt_flag;
+char circularBuffer[BUFFER_SIZE];
+int nextBufferIndex = 0;
+void producer(int thread_id);
+void consumer(int thread_id);
+
+my_sem_t *full;
+my_sem_t *empty;
+my_sem_t *mutex;
 
 // Our operating system prototype
 void prototype_os()
 {
+	full = mysem_create(0);
+	empty = mysem_create(BUFFER_SIZE);
+	mutex = mysem_create(1);
 	int i = 0;
 	running_thread[1] = NULL;
 	TCB *threads[NUM_THREADS];
@@ -184,7 +209,10 @@ void prototype_os()
 	{
 		// Here: call mythread_create so that the TCB for each thread is created
 		TCB *tcb = (TCB *) malloc(sizeof(TCB));
-		mythread_create(tcb, &mythread, i);
+		if (i % 2 == 0)
+			mythread_create(tcb, &consumer, i);
+		else
+			mythread_create(tcb, &producer, i);
 		threads[i] = tcb;
 	}
 	// Here: initialize the timer and its interrupt handler as is done in Project I
@@ -203,6 +231,8 @@ void prototype_os()
 		for (j = 0 ; j < MAX * 10; j++);
 	}
 }
+
+
 
 // This is the scheduler. It works with Injection.S to switch between threads
 unsigned long long mythread_scheduler(unsigned long long param_list) // context pointer
@@ -272,6 +302,70 @@ void mythread(int thread_id)
 		printf("This is message %d of thread #%d.\n", i, thread_id);
 		for (j = 0; j < MAX; j++);
 	}
+}
+
+// Provided thread code
+void producer(int thread_id)
+{
+	// The declaration of j as an integer was added on 10/24/2011
+	// The threads with ID#(0 - 3) perform insertion/deletion operations for 10 times
+	// while other threads perform the operations for 15 times
+	int i, j, n;
+	n = (thread_id < 4)? 10: 15;
+	for (i = 0; i < n; i++)
+	{
+		// Wait on empty
+		mysem_wait(empty);
+		// Wait on mutex
+		mysem_wait(mutex);
+		// modify the buffer
+		addX();
+		// Release stuff, up full
+		mysem_signal(mutex);
+		mysem_signal(full);
+		for (j = 0; j < MAX; j++);
+	}
+}
+
+// Provided thread code
+void consumer(int thread_id)
+{
+	// The declaration of j as an integer was added on 10/24/2011
+	int i, j, n;
+	n = (thread_id < 4)? 10: 15;
+	for (i = 0; i < n; i++)
+	{
+		// Wait on full
+		mysem_wait(full);
+		// Wait on mutext
+		mysem_wait(mutex);
+		// modify the buffer
+		removeX();
+		// Release mutex, up empty
+		mysem_signal(mutex);
+		mysem_signal(empty);
+		for (j = 0; j < MAX; j++);
+	}
+}
+
+void printBuffer(char buffer[]){
+	int i;
+	for (i = 0; i < BUFFER_SIZE; i++)
+		printf("%c", buffer[i]);
+	printf("\n");
+}
+
+void addX () {
+	circularBuffer[nextBufferIndex] = 'X';
+	nextBufferIndex = (nextBufferIndex + 1) % BUFFER_SIZE;
+	printBuffer(circularBuffer);
+}
+
+void removeX () {
+	nextBufferIndex = nextBufferIndex - 1;
+	nextBufferIndex = (nextBufferIndex < 0 )? BUFFER_SIZE - 1 : nextBufferIndex;
+	circularBuffer[nextBufferIndex] = 'O';
+	printBuffer(circularBuffer);
 }
 
 // Creates a thread and adds it to the ready queue
@@ -375,4 +469,51 @@ int main()
 	alt_printf("Hello from Nios II!\n");
 	prototype_os();
 	return 0;
+}
+
+// It returns the starting address a semaphore variable.
+// You can use malloc() to allocate memory space.
+my_sem_t* mysem_create( int initialCount ) {
+	my_sem_t* semaphore = malloc(sizeof(my_sem_t));
+	semaphore->count = initialCount;
+	semaphore->threads_waiting = 0;
+	semaphore->sem_blocking_id = headCount++;
+	printf("Semaphore created with initial count: %d\n", semaphore->count);
+	return semaphore;
+}
+
+// It performs the semaphore’s signal operation.
+void mysem_signal( my_sem_t* sem ) {
+	sem->count += 1;
+	if (sem->count <= 0) {//<= or >=
+		Node *blocked_node = heads[sem->sem_blocking_id];
+		blocked_node->thread.scheduling_status = READY;
+		remove_node(blocked_node, sem->sem_blocking_id);
+		add_node(blocked_node, READY);
+		sem->threads_waiting--;
+		printf("Unblocked: %d\nThreads waiting: %d\n",
+				blocked_node->thread.thread_id,
+				sem->threads_waiting);
+	}
+}
+
+// It performs the semaphore’s wait operation.
+void mysem_wait( my_sem_t* sem ) {
+	sem->count--;
+	if (sem->count < 0) {
+		running_thread[1]->thread.scheduling_status = sem->sem_blocking_id;
+		sem->threads_waiting++;
+		printf("Blocked: %d\nThreads waiting: %d\n",
+				running_thread[1]->thread.thread_id,
+				sem->threads_waiting);
+		// Block
+		int i = 0;
+		while (running_thread[1]->thread.scheduling_status == sem->sem_blocking_id)
+				for (i = 0 ; i < MAX; i++);
+	}
+}
+
+// It deletes the memory space of a semaphore.
+void mysem_delete( my_sem_t* sem ) {
+	free(sem);
 }
