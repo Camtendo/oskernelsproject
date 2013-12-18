@@ -81,5 +81,9 @@ void mysem_wait( my_sem_t* sem ) {
 
 // It deletes the memory space of a semaphore.
 void mysem_delete( my_sem_t* sem ) {
+	DISABLE_INTERRUPTS();
+	printf("Deleting semaphore.\n");
+	free(sem->blocking_queue);
 	free(sem);
+	ENABLE_INTERRUPTS();
 }

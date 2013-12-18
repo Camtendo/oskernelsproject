@@ -112,6 +112,7 @@ void os_primitive()
 	full = (my_sem_t*) malloc(sizeof(my_sem_t));
 	empty = (my_sem_t*) malloc(sizeof(my_sem_t));
 	mutex = (my_sem_t*) malloc(sizeof(my_sem_t));
+
 	mysem_create(full, 0);
 	mysem_create(empty, BUFFER_SIZE);
 	mysem_create(mutex, 1);
@@ -135,6 +136,9 @@ void os_primitive()
     else
         printf ("Unable to start the alarm\n");
 
+    int full_deleted = 0;
+    int empty_deleted = 0;
+    int mutex_deleted = 0;
     /* an endless while loop */
     while (1)
     {
@@ -142,6 +146,9 @@ void os_primitive()
         
         /* delay printf for a while */
         for (i = 0; i < 10*MAX; i++);
+        if (!full_deleted) mysem_delete(full);
+        if (!empty_deleted) mysem_delete(empty);
+        if (!mutex_deleted) mysem_delete(mutex);
     }
 }
 
