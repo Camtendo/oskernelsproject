@@ -19,7 +19,7 @@ typedef struct
     unsigned int *stack_pointer;
     enum tstate  state;
 } tcb;
-static tcb *current_running_thread;
+
 /* declaration */
 tcb *mythread_create(unsigned int tid, unsigned int stack_size, void (*mythread)(unsigned int tid));
 
@@ -37,3 +37,4 @@ unsigned int mythread_isQempty();
 
 void mythread_cleanup();
 
+tcb * getCurrentRunningThread();

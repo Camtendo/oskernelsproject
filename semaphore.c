@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include "semaphore.h"
 #include "thread_handler.h"
-#include "queue.h"
 #define SEM_MAX 10000
 /* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
 /* The two macros are extremely useful by turnning on/off interrupts when atomicity is required */
@@ -26,11 +25,11 @@
 void mysem_create( my_sem_t* semaphore, int initialCount ) {
 	semaphore->count = initialCount;
 	semaphore->threads_waiting = 0;
-	Q_type *_queue = (Q_type *) malloc(sizeof(Q_type));
-	Q_type queue = *_queue;
-	queue.head = NULL;
-	queue.tail = NULL;
-	queue.size = 0;
+	Q_type *queue = (Q_type *) malloc(sizeof(Q_type));
+	queue->head = NULL;
+	queue->tail = NULL;
+	queue->size = 0;
+	semaphore->blocking_queue = queue;
 	printf("Semaphore created with initial count: %d\n", semaphore->count);
 }
 
@@ -41,14 +40,16 @@ void mysem_signal( my_sem_t* sem ) {
 
 	printf("Signal semaphore. Updated count: %d\n", sem->count);
 	if (sem->count <= 0) {//<= or >=
-		tcb *blocked_node = (tcb *) dequeueFromQueue(((Q_type *)sem->blocking_queue));
-		if (blocked_node != NULL) {
-			blocked_node->state = READY;
-			enqueue(blocked_node);
-			sem->threads_waiting = sem->threads_waiting - 1;
-			printf("Unblocked: %d\nThreads waiting: %d\n",
-					blocked_node->tid,
-					sem->threads_waiting);
+		if (sem->threads_waiting > 0){
+			tcb *blocked_node = (tcb *) dequeueFromQueue(sem->blocking_queue);
+			if (blocked_node != NULL) {
+				blocked_node->state = READY;
+				enqueue((void *)blocked_node);
+				sem->threads_waiting = sem->threads_waiting - 1;
+				printf("Unblocked: %u\nThreads waiting: %d\n",
+						blocked_node->tid,
+						sem->threads_waiting);
+			}
 		}
 	}
 	ENABLE_INTERRUPTS();
@@ -58,14 +59,15 @@ void mysem_signal( my_sem_t* sem ) {
 void mysem_wait( my_sem_t* sem ) {
 	DISABLE_INTERRUPTS();
 	sem->count = sem->count - 1;
-
+	tcb *current_running_thread = getCurrentRunningThread();
 	printf("Wait on semaphore. Updated count: %d\n", sem->count);
 	if (sem->count < 0) {
 
 		current_running_thread->state = BLOCKED;
-		enqueueInQueue(((Q_type *)sem->blocking_queue), current_running_thread);
+		enqueueInQueue(sem->blocking_queue, (void *)current_running_thread);
+
 		sem->threads_waiting = sem->threads_waiting + 1;
-		printf("Blocked: %d\nThreads waiting: %d\n",
+		printf("Blocked: %u\nThreads waiting: %d\n",
 				current_running_thread->tid,
 				sem->threads_waiting);
 

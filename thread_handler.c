@@ -19,6 +19,10 @@
 /* the current running thread */
 static tcb *current_running_thread      = NULL;
 
+tcb * getCurrentRunningThread(){
+	return current_running_thread;
+}
+
 /* pointing to the stack/context of main() */
 static unsigned int *main_stack_pointer = NULL;
 
@@ -93,11 +97,13 @@ void *mythread_schedule(void *context)
     {
         if (current_running_thread != NULL)
         {
-            // assert(current_running_thread->state == RUNNING);
-            // assert(main_stack_pointer != NULL);
-            current_running_thread->state = READY;
-            current_running_thread->stack_pointer = (unsigned int *)context;
-            enqueue(current_running_thread);
+            //assert(current_running_thread->state == RUNNING);
+        	// assert(main_stack_pointer != NULL);
+        	current_running_thread->stack_pointer = (unsigned int *)context;
+        	if (current_running_thread->state == RUNNING) {
+        		current_running_thread->state = READY;
+        		enqueue(current_running_thread);
+        	}
         }
         else if (main_stack_pointer == NULL)
         {
@@ -105,7 +111,7 @@ void *mythread_schedule(void *context)
         }
         
         current_running_thread = (tcb *)dequeue();
-        // assert(current_running_thread->state == READY);
+        //assert(current_running_thread->state == READY);
         current_running_thread->state = RUNNING;
         
         context = (void *)(current_running_thread->stack_pointer);
@@ -126,10 +132,13 @@ unsigned int mythread_isQempty()
 void mythread_cleanup()
 {
     DISABLE_INTERRUPTS();
+    printf("Completed thread %u\n", current_running_thread->tid);
     mythread_terminate(current_running_thread);
     free(current_running_thread->stack);
     free(current_running_thread);
     current_running_thread = NULL;
     ENABLE_INTERRUPTS();
-    while(1);
+    int i = 0;
+    while(1)
+    	for (i = 0 ; i < 50000; i++);
 }

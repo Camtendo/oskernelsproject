@@ -7,10 +7,11 @@
 #define NUM_THREADS 8
 
 /* a delay time used to adjust the frequency of printf messages */
-#define MAX 50000
+#define MAX 70000
 #define BUFFER_SIZE 6
 char circularBuffer[BUFFER_SIZE];
 static int nextBufferIndex = 0;
+static int currentBufferSize = 0;
 static my_sem_t *full = NULL;
 static my_sem_t *empty = NULL;
 static my_sem_t *mutex = NULL;
@@ -31,17 +32,18 @@ void mythread(unsigned int tid)
 void addX () {
 	circularBuffer[nextBufferIndex] = 'X';
 	nextBufferIndex = (nextBufferIndex + 1) % BUFFER_SIZE;
+	currentBufferSize += 1;
 	printBuffer(circularBuffer);
 }
 
 void removeX () {
-	nextBufferIndex = nextBufferIndex - 1;
-	nextBufferIndex = (nextBufferIndex < 0 )? BUFFER_SIZE - 1 : nextBufferIndex;
-	circularBuffer[nextBufferIndex] = 'O';
+	int remIndex = (nextBufferIndex - currentBufferSize + BUFFER_SIZE) % 6;
+	circularBuffer[remIndex] = 'O';
+	currentBufferSize -= 1;
 	printBuffer(circularBuffer);
 }
 // Provided thread code
-void producer(int thread_id)
+void producer(unsigned int thread_id)
 {
 	// The declaration of j as an integer was added on 10/24/2011
 	// The threads with ID#(0 - 3) perform insertion/deletion operations for 10 times
@@ -50,35 +52,45 @@ void producer(int thread_id)
 	n = (thread_id < 4)? 10: 15;
 	for (i = 0; i < n; i++)
 	{
+		printf("This is action %d of producer #%d.\n", i, thread_id);
 		// Wait on empty
+		printf("EMPTY\n");
 		mysem_wait(empty);
 		// Wait on mutex
+		printf("MUTEX\n");
 		mysem_wait(mutex);
 		// modify the buffer
 		addX();
 		// Release stuff, up full
+		printf("MUTEX\n");
 		mysem_signal(mutex);
+		printf("FULL\n");
 		mysem_signal(full);
 		for (j = 0; j < MAX; j++);
 	}
 }
 
 // Provided thread code
-void consumer(int thread_id)
+void consumer(unsigned int thread_id)
 {
 	// The declaration of j as an integer was added on 10/24/2011
 	int i, j, n;
 	n = (thread_id < 4)? 10: 15;
 	for (i = 0; i < n; i++)
 	{
+		printf("This is action %d of consumer #%d.\n", i, thread_id);
 		// Wait on full
+		printf("FULL\n");
 		mysem_wait(full);
 		// Wait on mutex
+		printf("MUTEX\n");
 		mysem_wait(mutex);
 		// modify the buffer
 		removeX();
 		// Release mutex, up empty
+		printf("MUTEX\n");
 		mysem_signal(mutex);
+		printf("EMPTY\n");
 		mysem_signal(empty);
 		for (j = 0; j < MAX; j++);
 	}
@@ -112,7 +124,7 @@ void os_primitive()
     		thread_pointer = mythread_create(i, 4096, consumer);
     	else
     		thread_pointer = mythread_create(i, 4096, producer);
-
+    	printf("Created thread with id: %u\n", thread_pointer->tid);
     	//thread_pointer = mythread_create(i, 4096, mythread);   // 4B * 4096 entries = 16KB
     	mythread_start(thread_pointer);
     	mythread_join(thread_pointer);
