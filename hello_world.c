@@ -313,16 +313,18 @@ void mythread_join(int thread_id)
 	temp = lookup_node(thread_id, READY);
 	TCB *tcb;
 	int calling_id = running_thread[1]->thread.thread_id;
-	alt_printf("Joining.\n");
+	alt_printf("Joining if not finished.\n");
+
 	temp = lookup_node(thread_id, READY);
-	if (temp > 0)
+	if (temp != 0xffffffff)
 		tcb = &temp->thread;
-	if (temp > 0 && tcb->scheduling_status != DONE){
+	if (temp != 0xffffffff && tcb->scheduling_status != DONE){
 		// Join the thread
 		tcb->blocking_id = calling_id;
 		running_thread[1]->thread.scheduling_status = WAITING;
 		joined = TRUE;
 	}
+
 	if (joined == TRUE)
 		alt_printf("Joined (%x)\n", thread_id);
 	// Wait for timer
@@ -337,9 +339,9 @@ void mythread_cleanup()
 	DISABLE_INTERRUPTS();
 	int id = running_thread[1]->thread.blocking_id;
 	if (id > 0) {
-		Node * temp = -1;
+		Node * temp = 0xffffffff;
 		temp = lookup_node(running_thread[1]->thread.blocking_id, WAITING); //Blocking ID was not the expected value Camtendo 11/4
-		if (temp != -1) // not found
+		if (temp != 0xffffffff) // not found
 		{
 			Node * blocked_node = (Node *) malloc(sizeof(Node));
 			blocked_node->thread = temp->thread;
