@@ -53,7 +53,7 @@ Node *(heads[8]);
 int headCount = 5;
 Node *(running_thread[2]);
 
-typedef struct my_sem_t {
+typedef struct my_sem_type {
 	int sem_blocking_id;
 	int count;
 	int threads_waiting;
@@ -191,6 +191,8 @@ char circularBuffer[BUFFER_SIZE];
 int nextBufferIndex = 0;
 void producer(int thread_id);
 void consumer(int thread_id);
+void removeX (void) ;
+void addX (void) ;
 
 my_sem_t *full;
 my_sem_t *empty;
@@ -199,6 +201,7 @@ my_sem_t *mutex;
 // Our operating system prototype
 void prototype_os()
 {
+	nextBufferIndex = 0;
 	full = mysem_create(0);
 	empty = mysem_create(BUFFER_SIZE);
 	mutex = mysem_create(1);
@@ -337,7 +340,7 @@ void consumer(int thread_id)
 	{
 		// Wait on full
 		mysem_wait(full);
-		// Wait on mutext
+		// Wait on mutex
 		mysem_wait(mutex);
 		// modify the buffer
 		removeX();
@@ -355,13 +358,13 @@ void printBuffer(char buffer[]){
 	printf("\n");
 }
 
-void addX () {
+void addX (void) {
 	circularBuffer[nextBufferIndex] = 'X';
 	nextBufferIndex = (nextBufferIndex + 1) % BUFFER_SIZE;
 	printBuffer(circularBuffer);
 }
 
-void removeX () {
+void removeX (void) {
 	nextBufferIndex = nextBufferIndex - 1;
 	nextBufferIndex = (nextBufferIndex < 0 )? BUFFER_SIZE - 1 : nextBufferIndex;
 	circularBuffer[nextBufferIndex] = 'O';
@@ -474,43 +477,58 @@ int main()
 // It returns the starting address a semaphore variable.
 // You can use malloc() to allocate memory space.
 my_sem_t* mysem_create( int initialCount ) {
-	my_sem_t* semaphore = malloc(sizeof(my_sem_t));
+	my_sem_t* semaphore = (my_sem_t*) malloc(36);
 	semaphore->count = initialCount;
 	semaphore->threads_waiting = 0;
-	semaphore->sem_blocking_id = headCount++;
+	semaphore->sem_blocking_id = headCount;
+	headCount += 1;
 	printf("Semaphore created with initial count: %d\n", semaphore->count);
 	return semaphore;
 }
 
-// It performs the semaphore’s signal operation.
+// It performs the semaphore's signal operation.
 void mysem_signal( my_sem_t* sem ) {
-	sem->count += 1;
+	DISABLE_INTERRUPTS();
+	sem->count = sem->count + 1;
+
+	printf("Signal semaphore. Updated count: %d\n", sem->count);
 	if (sem->count <= 0) {//<= or >=
 		Node *blocked_node = heads[sem->sem_blocking_id];
-		blocked_node->thread.scheduling_status = READY;
-		remove_node(blocked_node, sem->sem_blocking_id);
-		add_node(blocked_node, READY);
-		sem->threads_waiting--;
-		printf("Unblocked: %d\nThreads waiting: %d\n",
-				blocked_node->thread.thread_id,
-				sem->threads_waiting);
+		if (blocked_node != NULL) {
+			Node * new_node = (Node *) malloc(sizeof(Node));
+			new_node->thread = blocked_node->thread;
+
+			new_node->thread.scheduling_status = READY;
+			remove_node(blocked_node, sem->sem_blocking_id);
+			add_node(new_node, READY);
+			sem->threads_waiting = sem->threads_waiting - 1;
+			printf("Unblocked: %d\nThreads waiting: %d\n",
+					blocked_node->thread.thread_id,
+					sem->threads_waiting);
+		}
 	}
+	ENABLE_INTERRUPTS();
 }
 
-// It performs the semaphore’s wait operation.
+// It performs the semaphore's wait operation.
 void mysem_wait( my_sem_t* sem ) {
-	sem->count--;
+	DISABLE_INTERRUPTS();
+	sem->count = sem->count - 1;
+
+	printf("Wait on semaphore. Updated count: %d\n", sem->count);
 	if (sem->count < 0) {
 		running_thread[1]->thread.scheduling_status = sem->sem_blocking_id;
-		sem->threads_waiting++;
+		sem->threads_waiting = sem->threads_waiting + 1;
 		printf("Blocked: %d\nThreads waiting: %d\n",
 				running_thread[1]->thread.thread_id,
 				sem->threads_waiting);
-		// Block
-		int i = 0;
-		while (running_thread[1]->thread.scheduling_status == sem->sem_blocking_id)
-				for (i = 0 ; i < MAX; i++);
+
 	}
+	ENABLE_INTERRUPTS();
+	// Wait for interrupt if blocked
+	int i = 0;
+	while (running_thread[1]->thread.scheduling_status == sem->sem_blocking_id)
+		for (i = 0 ; i < MAX; i++);
 }
 
 // It deletes the memory space of a semaphore.
